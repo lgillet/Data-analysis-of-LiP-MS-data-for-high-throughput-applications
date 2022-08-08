@@ -1,0 +1,8 @@
+Here we describe the analysis pipeline for a case-control study, where protein structural alterations and abundance changes are compared between two conditions (S. cerevisiae cells treated with a short osmotic stress vs control). 
+Data processing, quality control and statistical analysis is performed using the R-base package MSstatsLiP. 
+
+Data to run the notebook is available on Zenodo:
+
+- LiP data: 180516_Sc_OsmoSentinels_LIP_october_Report.csv
+- Tryptic data: 20210514_145322_OSMOTRI_Report.xls
+- fasta file: 170721_OFFICIAL_uniprot_Sce_HRMkit_proteinaseK_aSyn.fasta
