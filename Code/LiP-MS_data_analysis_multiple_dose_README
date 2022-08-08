@@ -1,0 +1,12 @@
+Titration analysis with MSstatsLiP
+
+MSstatsLiP offers the possibility to analyze data sets with multiple data points by adapting the linear
+mixed effect model to account for between-subject heterogeneity over different data points. Here we
+apply MSstatsLiP to a drug dose titration experiment where Rapamycin was added to a yeast lysate
+at nine different concentrations (Piazza et al., 2020). 
+
+Data to run the notebook is available on Zenodo:
+
+- 2021-02-24_NP_Rap_Report.csv
+- fasta file: 170721_OFFICIAL_uniprot_Sce_HRMkit_proteinaseK_aSyn.fasta
+
