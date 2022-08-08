@@ -1,0 +1,185 @@
+---
+title: "Analysis of a LiP-MS data set"
+author: Malinovska Liliana (<malinovska@imsb.biol.ethz.ch>),Valentina Cappelletti
+  (<cappelletti@imsb.biol.ethz.ch>)
+output:
+  html_notebook:
+    toc: yes
+    highlight: pygments
+    theme: lumen
+---
+
+# MSstatsLiP Workflow: case-control study
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook describing the analysis of a LiP-MS experiment using [MSstatsLiP](https://github.com/Vitek-Lab/MSstatsLiP). When you execute code within the notebook, the results appear beneath the code. 
+
+Here, we use LiP-MS data of *S.cerevisiae* exposed to osmotic stress (10 min, 0.4M NaCl) compared with untreated cells (Cappelletti et al., 2021). The data set is composed of four biological replicates per condition.
+
+## 1. Installation
+
+- Install and load all necessary packages. The installation needs to be performed at first use only. Un-comment the lines for execution.
+```{r setup}
+ knitr::opts_chunk$set(include = FALSE)
+# library(devtools)
+# devtools::install_github("Vitek-Lab/MSstatsConvert")
+# devtools::install_github("Vitek-Lab/MSstats")
+# devtools::install_github("Vitek-Lab/MSstatsTMT")
+# devtools::install_github("Vitek-Lab/MSstatsPTM")
+# devtools::install_github("Vitek-Lab/MSstatsLiP")
+
+
+library(MSstatsLiP)
+library(MSstatsPTM)
+library(tidyverse)
+```
+
+- Set the working directory
+
+```{r set working drectory, echo=TRUE, message=FALSE, warning=FALSE, include=TRUE}
+input_folder=choose.dir(caption="Choose the working directory")
+knitr::opts_knit$set(root.dir = input_folder) 
+```
+# 2. Data preprocessing
+
+## 2.1 Load datasets
+
+Load the data from the Spectronaut export. LiP data is loaded as `raw_lip`,  trypsin-only control data (TrP data) is loaded as `raw_prot`. The function `choose.files()` enables browsing for the input file. 
+
+**CAVE:** Make sure the separator `delim` is set correctly. For comma-separated values (csv), the separator is set to `delim=","`.
+
+```{r load data, echo=TRUE, message=FALSE, warning=FALSE,include=TRUE}
+raw_lip <- read_delim(file=choose.files(caption="Choose LiP dataset"), 
+                         delim=",", escape_double = FALSE, trim_ws = TRUE)
+
+raw_prot <- read_delim(file=choose.files(caption="Choose TrP dataset"), 
+                          delim="\t", escape_double = FALSE, trim_ws = TRUE)
+```
+
+Load the fasta file that was used in the Spectronaut search.
+
+```{r load fasta file, message=FALSE, warning=FALSE, echo=TRUE,include=TRUE}
+fasta_file=choose.files(caption = "Choose FASTA file")
+```
+
+Convert the data to MSstatsLiP format. Load first the LiP data set `raw_lip`, then the FASTA file `fasta_file` used for searches. If the experiment contains TrP data, `raw_prot` is loaded last.
+
+To remove information on iRT peptides, the default setting is `removeiRT = TRUE`. As default, peptides containing modifications are filtered, but this can be changed using the argument `removeModifications`. Also, peptides with multiple protein annotations are filtered as default. However, for data sets containing protein isoforms, this argument can be set to `removeNonUniqueProteins = FALSE`.
+
+The default settings use *PeakArea* as measure of intensity, filter features based on the q-value, with a q-value cut-off of 0.01 and import all conditions. You can adjust the settings accordingly. For information on each option, refer to the vignette of the function.
+. 
+```{r convert to MSstatsLiP format, message=FALSE, warning=FALSE,echo=TRUE,include=TRUE}
+msstats_data <- SpectronauttoMSstatsLiPFormat(raw_lip, fasta_file,raw_prot)
+```
+You can inspect the data sets.
+```{r Inspect data, echo=TRUE,include=TRUE}
+head(msstats_data[["LiP"]])
+head(msstats_data[["TrP"]])
+```
+
+## 2.2 Correct nomenclature
+
+#### Step 1: 
+Ensure that the `Condition` nomenclature is identical in both data sets. If the output is `TRUE` for all conditions, continue to [step 2](#steptwo).
+
+```{r Test Condtion nomenclature, echo=TRUE,include=TRUE}
+unique(msstats_data[["LiP"]]$Condition)%in%unique(msstats_data[["TrP"]]$Condition)
+```
+
+To correct the condition nomenclature, display the condition for both data sets.
+```{r Display Condtion nomenclature, echo=TRUE,include=TRUE}
+paste("LiP Condition nomenclature:", unique(msstats_data[["LiP"]]$Condition), ",",
+      "TrP Condition nomenclature:",unique(msstats_data[["TrP"]]$Condition))
+```
+
+If necessary, un-comment following lines to correct the condition nomenclature in either of the data sets. E.g. change the nomenclature of the TrP samples from `Cond1` to `cond1`.
+
+```{r Correct Condition nomenclature, echo=TRUE,include=TRUE}
+# msstats_data[["TrP"]] = msstats_data[["TrP"]] %>% 
+#   mutate(Condition = case_when(Condition == "Cond1" ~ "cond1",
+#                                Condition == "Cond2" ~ "cond2"))
+```
+
+#### Step 2: {#steptwo}
+
+Ensure that `BioReplicate` nomenclature is correctly annotated (see also  [MSstats](http://msstats.org/wp-content/uploads/2020/02/MSstats_v3.18.1_manual_2020Feb26-v2.pdf) user manual. The BioReplicate needs a unique nomenclature, while the technical replicates can have duplicate numbering. If the replicate nomenclature is correct, proceed to [section 2.3](#data-summ).
+
+```{r Display BioReplicate nomenclature, echo=TRUE,include=TRUE}
+paste("LiP BioReplicate nomenclature:", unique(msstats_data[["LiP"]]$BioReplicate), ",",
+      "TrP BioReplicate nomenclature:",unique(msstats_data[["TrP"]]$BioReplicate))
+```
+
+Adjust `BioReplicate` column to correct nomenclature for a Case-control experiment. 
+
+```{r Correct replicate nomenclature, echo=TRUE,include=TRUE}
+msstats_data[["LiP"]] = msstats_data[["LiP"]] %>% 
+  mutate(BioReplicate = paste0(Condition,".",BioReplicate))
+
+msstats_data[["TrP"]] = msstats_data[["TrP"]] %>% 
+  mutate(BioReplicate = paste0(Condition,".",BioReplicate))
+```
+
+Inspect corrected `BioReplicate` column. 
+
+```{r Display corrected BioReplicate nomenclature, echo=TRUE,include=TRUE}
+paste("LiP BioReplicate nomenclature:", unique(msstats_data[["LiP"]]$BioReplicate), ",",
+      "TrP BioReplicate nomenclature:",unique(msstats_data[["TrP"]]$BioReplicate))
+```
+
+## 2.3 Data Summarization{#data-summ}
+
+Summarize the data. The default settings use a log2-transformation and normalize the data using the  `"equalizeMedians"` method. The default summary method is `"TMP"` and imputation is set to `"FALSE"`. For detailed information on all settings, please refer to the function vignette. 
+
+This function will take some time and memory. If memory is limited, it is advisable to remove the raw files using the `rm()` function and clearing the memory cache using the `gc()` function.
+
+```{r Data summarization, message=FALSE, warning=FALSE, echo=TRUE,include=TRUE}
+MSstatsLiP_Summarized <- dataSummarizationLiP(msstats_data, normalization.LiP = "equalizeMedians")
+```
+
+Inspect `MSstatsLiP_Summarized`. 
+```{r Inspect summarized data, echo=TRUE,include=TRUE}
+names(MSstatsLiP_Summarized[["LiP"]])
+
+head(MSstatsLiP_Summarized[["LiP"]]$FeatureLevelData)
+head(MSstatsLiP_Summarized[["LiP"]]$ProteinLevelData)
+
+head(MSstatsLiP_Summarized[["TrP"]]$FeatureLevelData)
+head(MSstatsLiP_Summarized[["TrP"]]$ProteinLevelData)
+```
+
+Save and/or load summarized data. 
+```{r Save summarized data, echo=TRUE,include=TRUE}
+save(MSstatsLiP_Summarized, file = 'MSstatsLiP_summarized.rda')
+load(file = 'MSstatsLiP_summarized.rda')
+```
+
+
+# 3. Modelling
+
+Run the modeling to obtain significantly altered peptides and proteins. The function `groupComparisonLiP`outputs a list with three separate models: 1. `LiP.Model`, which contains the differential analysis on peptide level in the LiP sample without correction for protein abundance alterations. 2. `Adjusted.LiP.Model`, which contains the differential analysis on peptide level in the LiP sample with correction for protein abundance alterations 3. `TrP.Model`, which contains the differential analysis on protein level. The default setting of the function is a pairwise comparison of all existing groups. Alternatively, a contrast matrix can be provided to specify the comparisons of interest. See Vignette for details.
+```{r Modelling, message=FALSE, warning=FALSE, echo=TRUE,include=TRUE}
+MSstatsLiP_model = groupComparisonLiP(MSstatsLiP_Summarized, fasta=fasta_file)
+```
+
+Inspect `MSstatsLiP_model`. 
+```{r Inspect model, message=FALSE, warning=FALSE, echo=TRUE,include=TRUE}
+head(MSstatsLiP_model[["LiP.Model"]])
+head(MSstatsLiP_model[["TrP.Model"]])
+head(MSstatsLiP_model[["Adjusted.LiP.Model"]])
+```
+
+Save and/or load model data. 
+```{r Save model, echo=TRUE, message=FALSE, warning=FALSE, include=TRUE}
+save(MSstatsLiP_model, file = 'MSstatsLiP_model.rda')
+load(file = 'MSstatsLiP_model.rda')
+```
+
+
+# 4. Save outputs
+
+Save the output of the modeling in a .csv file. 
+```{r Save output, echo=TRUE,include=TRUE}
+write_csv(MSstatsLiP_model[["LiP.Model"]], "msstats_model_RAW.csv")
+write_csv(MSstatsLiP_model[["Adjusted.LiP.Model"]], "msstats_model_ADJUSTED.csv")
+write_csv(MSstatsLiP_model[["TrP.Model"]], "msstats_model_PROTEIN.csv")
+```
+

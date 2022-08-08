@@ -1,0 +1,608 @@
+---
+title: "Visualization of a LiP-MS data set"
+author: "Malinovska Liliana (<malinovska@imsb.biol.ethz.ch>),Valentina Cappelletti (<cappelletti@imsb.biol.ethz.ch>)"
+output:
+  html_notebook:
+    toc: yes
+    highlight: pygments
+    theme: lumen
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook describing the analysis of a LiP-MS experiment using [MSstatsLiP](https://github.com/Vitek-Lab/MSstatsLiP). When you execute code within the notebook, the results appear beneath the code.
+
+# 1. Preparation
+
+- Install and load all necessary packages. The installation needs to performed at first use only. Un-commend the lines for execution.
+
+```{r setup, include=FALSE, echo=FALSE}
+ knitr::opts_chunk$set(
+	message = FALSE,
+	warning = FALSE,
+	include = FALSE
+)
+# install.packages("devtools")
+# install.packages("checkmate")
+# install.packages("factoextra")
+# install.packages("gghighlight")
+# install.packages("gridExtra")
+# install.packages("goeveg")
+# install.packages("magrittr")
+# install.packages('dendextend')
+# install.packages('metafolio')
+# install.packages('corrplot')
+# install.packages('FactoMineR')
+# install.packages("GGally")
+# library(devtools)
+# BiocManager::install("MSstatsPTM")
+# 
+# devtools::install_github("Vitek-Lab/MSstatsLiP")
+# install_github("vqv/ggbiplot")
+library(MSstatsLiP)
+library(gghighlight)
+library(grid)
+library(gridExtra)
+library(magrittr)
+library(dendextend)
+library(GGally)
+library(RColorBrewer)
+library(ggbiplot)
+library(dplyr)
+library(data.table)
+library(ggrepel)
+library(tidyverse)
+```
+
+- Set the working directory
+Navigate to the folder where the summarized data set and the MSstatsLiP model is deposited. 
+
+```{r set working drectory, message=FALSE, warning=FALSE, echo=TRUE, include=TRUE}
+ input_folder=choose.dir(caption="Choose the working directory")
+ knitr::opts_knit$set(root.dir = input_folder) 
+```
+
+- Load the summarized data set. 
+
+```{r load summarized data, message=FALSE, warning=FALSE, echo=TRUE, include=TRUE}
+setwd(input_folder)
+load(file = 'MSstatsLiP_Summarized.rda')
+```
+
+- Load the MSstatsLiP model containing the results of the differential analysis. 
+
+```{r load model data, message=FALSE, warning=FALSE, echo=TRUE, include=TRUE}
+setwd(input_folder)
+load(file = 'MSstatsLiP_model.rda')
+```
+
+- Load the fasta file.
+
+```{r load fata file, message=FALSE, warning=FALSE, echo=TRUE, include=TRUE}
+fasta_file=choose.files(caption = "Choose FASTA file")
+```
+
+# 2. Quality control
+
+We assess the quality of the acquired data to judge whether the experiment has been conducted correctly.
+
+## 2.1 Intensity distribution
+
+First, visualize the distribution of intensities in both, the LiP and the TrP samples. The function `dataProcessPlotsLiP` with the argument `type="QCPLOT` can be used to visualize the distribution of peptide intensities in both data sets. The argument `which.Protein`can be used to select specific proteins, the default setting is `"allonly"`, which visualizes all peptide intensities in a run.
+
+```{r Plot QCPlot, message=FALSE, warning=FALSE, echo=TRUE, include=TRUE}
+dataProcessPlotsLiP(MSstatsLiP_Summarized,
+                    type = 'QCPLOT',
+                    address = FALSE,
+                    which.Peptide = "allonly",
+                    lip.title = "All LiP Peptides",
+                    protein.title = "All Proteins")
+```
+
+Additionally, the function `dataProcessPlotsLiP` can be used to visualize profile plots using the argument `type = "ProfilePlot"`. The argument `which.Protein` can be used to select a peptide of interest, if `"all"`is set, the profile plots for all peptides and corresponding proteins.
+
+```{r Profile Plots, fig.height=10, fig.width=15}
+# dataProcessPlotsLiP(MSstatsLiP_Summarized,
+#                     type = 'ProfilePlot',
+#                     which.Peptide = c("P37840_AATGFVKK"),
+#                     which.Protein=c("P37840"),
+#                     ylimUp=FALSE,
+#                     ylimDown=10,
+#                     address = FALSE)
+```
+
+## 2.2 Coefficient of variation
+
+Calculate and plot the coefficient of variation (CV) in each group `GROUP`. The CV is calculated on feature level `FEATURE` as the standard deviation over the mean of the non-transformed feature intensity `INTENSITY`.\
+The plot is based on ggplot and can be modified at convenience. The median CV can be displayed the the plot using the `stat_summary` function. a) LiP samples
+
+```{r Calculate and plot CV LiP, fig.height=5, fig.width=7.5, message=FALSE, warning=FALSE, echo=TRUE, include=TRUE}
+MSstatsLiP_Summarized$LiP$FeatureLevelData%>%
+    group_by(FEATURE, GROUP) %>% 
+    summarize(cv = sd(INTENSITY) / mean(INTENSITY)) %>% 
+    ggplot(aes(x = GROUP, y = cv, fill = GROUP)) + 
+    geom_violin() + 
+    theme_bw()+
+    labs(title = "Coefficient of Variation between Condtions",
+         subtitle = "LiP samples",
+         y = "Coefficient of Variation", 
+         x = "Conditon")+    
+    scale_fill_brewer(palette = "Paired")+
+    stat_summary(fun.data=function(x){return(data.frame(y=0, label=round(median(x, na.rm = TRUE),4)))}, geom="text", hjust=0.5, vjust=1)
+```
+
+b)  TrP samples
+
+```{r Calculate and plot CV TrP, fig.height=5, fig.width=7.5, message=FALSE, warning=FALSE, echo=TRUE, include=TRUE}
+MSstatsLiP_Summarized$TrP$FeatureLevelData%>%
+    group_by(FEATURE, GROUP) %>% 
+    summarize(cv = sd(INTENSITY) / mean(INTENSITY)) %>% 
+    ggplot(aes(x = GROUP, y = cv, fill = GROUP)) + 
+    geom_violin() + 
+    theme_bw()+
+    labs(title = "Coefficient of Variation between Condtions", 
+         subtitle = "LiP samples",
+         y = "Coefficient of Variation", 
+         x = "Conditon")+    
+    scale_fill_brewer(palette = "Paired")+
+    stat_summary(fun.data=function(x){return(data.frame(y=0, label=round(median(x, na.rm = TRUE),4)))}, geom="text", hjust=0.5, vjust=1)
+```
+
+## 2.3 Trypticity distribution
+
+Use the built-in trypticity plotting function `trypticHistogramLiP()` to visualize the distribution of fully- and half-tryptic peptides, defined as peptides with two tryptic ends (FT) and peptides with one tryptic end (HT).
+
+```{r visualize trypticity basic, fig.height=5, fig.width=15, echo=TRUE, include=TRUE}
+trypticHistogramLiP(MSstatsLiP_Summarized, fasta_file,
+                    color_scale = "grey",
+                    address = FALSE)
+```
+
+The above definition of trypticity annotates terminal peptides as half-tryptic peptides. The function `calculateTrypticity()` can discriminate terminal peptides and calculates `TRUE/FALSE` values for the following characteristics:
+
++---------------------+-------------------------------------------------------------------------------------+
+| value               | Description                                                                         |
++:====================+:====================================================================================+
+| fully_TRI           | TRUE: peptide is result of tryptic cleavage, FALSE: peptide has one non-tryptic end |
++---------------------+-------------------------------------------------------------------------------------+
+| NSEMI_TRI           | TRUE: peptide has the non-tryptic cleavage at the N-terminus                        |
++---------------------+-------------------------------------------------------------------------------------+
+| CSEMI_TRI           | TRUE: peptide has the non-tryptic cleavage at the C-terminus                        |
++---------------------+-------------------------------------------------------------------------------------+
+| CTERMINUS           | TRUE: peptide is at the C-terminus of the protein                                   |
++---------------------+-------------------------------------------------------------------------------------+
+
+Below we plot the trypticity distribution of each replicate `SUBJECT` in each group `GROUP` and we choose to visualize the distribution of fully-tryptic and half-tryptic peptides and the position of the non-tryptic end by assessing the variables `fill=interaction(fully_TRI,NSEMI_TRI,CSEMI_TRI)`. The plot is based on ggplot and can be modified at convenience.
+
+```{r calculate and visualize trypticity, fig.height=5, fig.width=15, message=FALSE, echo=TRUE, include=TRUE, warning=FALSE}
+MSstatsLiP_Summarized$LiP$FeatureLevelData%>%
+  rename(PeptideSequence=PEPTIDE, ProteinName=PROTEIN)%>%
+  mutate(PeptideSequence=substr(PeptideSequence, 1,nchar(as.character(PeptideSequence))-2))%>%
+  full_join(.,calculateTrypticity(.,fasta_file))%>%
+  ggplot()+
+  geom_bar(aes(x=SUBJECT, fill=interaction(fully_TRI,NSEMI_TRI,CSEMI_TRI)),position="fill", color="black")+
+  facet_grid(~GROUP, scales = "free_x")+
+  labs(x="Replicate", 
+       y="Trypticity content [%]", 
+       fill="Trypticity", 
+       title="Distribution of trypticity")+
+  theme_bw()+
+  scale_fill_grey(labels=c("TRUE.FALSE.FALSE"="fully tryptic", "FALSE.TRUE.FALSE"="N-term half tryptic","FALSE.FALSE.TRUE"="C-term half tryptic", "FALSE.FALSE.FALSE"=""))+
+  scale_y_continuous(breaks = seq(0,1,0.2), labels = seq(0,100,20))
+
+```
+
+## 2.4 Protein and Peptide Identifications
+
+Visualize the number of identified proteins and peptides in each replicate `SUBJECT` in each group `GROUP`. Note that we filter for identified peptides only by using `!is.na(ABUNDANCE)`. The plots are based on ggplot and can be modified at convenience. The function `grid.arrange`from the [gridExtra](https://www.rdocumentation.org/packages/gridExtra/versions/2.3) package arranges the plots next to each other.
+
+a)  LiP samples
+
+```{r Peptide and Protein ID LiP, fig.height=5, fig.width=15, message=FALSE, warning=FALSE, echo=TRUE, include=TRUE}
+grid.arrange(
+  MSstatsLiP_Summarized$LiP$FeatureLevelData%>%
+    filter(!is.na(ABUNDANCE))%>%
+    group_by(GROUP,SUBJECT)%>%
+    summarize(distinct_peptides=n_distinct(PEPTIDE))%>%
+    ggplot(aes(x=SUBJECT, y=distinct_peptides))+
+    geom_col(fill="white",color="black")+
+    facet_grid(~GROUP, scales = "free")+
+    theme_bw()+
+    geom_text(aes(label=distinct_peptides), vjust=0, hjust=0.5)+
+    labs(x="Replicate", 
+         y="Number of identified peptides", 
+         title="Number of identified peptides",
+         subtitle="LiP sample"),
+  
+  MSstatsLiP_Summarized$LiP$FeatureLevelData%>%
+    filter(!is.na(ABUNDANCE))%>%
+    group_by(GROUP,SUBJECT)%>%
+    summarize(distinct_proteins=n_distinct(PROTEIN))%>%
+    ggplot(aes(x=SUBJECT, y=distinct_proteins))+
+    geom_col(fill="white",color="black")+
+    facet_grid(~GROUP, scales = "free")+
+    theme_bw()+
+    geom_text(aes(label=distinct_proteins), vjust=0, hjust=0.5)+
+    labs(x="Replicate", 
+         y="Number of identified proteins", 
+         title="Number of identified proteins",
+         subtitle="LiP sample"),
+
+  ncol=2)
+```
+
+b)  TrP samples
+
+```{r Peptide and Protein ID TrP, fig.height=5, fig.width=15, message=FALSE, warning=FALSE, echo=TRUE, include=TRUE}
+grid.arrange(
+  MSstatsLiP_Summarized$TrP$FeatureLevelData%>%
+    filter(!is.na(ABUNDANCE))%>%
+    group_by(GROUP,SUBJECT)%>%
+    summarize(distinct_peptides=n_distinct(PEPTIDE))%>%
+    ggplot(aes(x=SUBJECT, y=distinct_peptides))+
+    geom_col(fill="white",color="black")+
+    facet_grid(~GROUP, scales = "free")+
+    theme_bw()+
+    geom_text(aes(label=distinct_peptides), vjust=0, hjust=0.5)+
+    labs(x="Replicate", 
+         y="Number of identified peptides", 
+         title="Number of identified peptides",
+         subtitle="TrP sample"),
+  
+  MSstatsLiP_Summarized$TrP$FeatureLevelData%>%
+    filter(!is.na(ABUNDANCE))%>%
+    group_by(GROUP,SUBJECT)%>%
+    summarize(distinct_proteins=n_distinct(PROTEIN))%>%
+    ggplot(aes(x=SUBJECT, y=distinct_proteins))+
+    geom_col(fill="white",color="black")+
+    facet_grid(~GROUP, scales = "free")+
+    theme_bw()+
+    geom_text(aes(label=distinct_proteins), vjust=0, hjust=0.5)+
+    labs(x="Replicate", 
+         y="Number of identified proteins", 
+         title="Number of identified proteins",
+         subtitle="TrP sample"),
+
+  ncol=2)
+```
+
+# 3 Data distribution
+
+We assess the distribution of the data, to ensure that the conditions to be compared separate well. Moreover, we can identify outlier or detect batch effects. In the following, we use the log2-transformed values `ABUNDANCE`. Alternatively, one can use the non-transformed values `INTENSITY`.
+
+## 3.1 Correlation
+
+We perform correlation analysis using pearson correlation and visualize the correlation coefficients in a tile map (as well as the distribution of the intensities in a scatter plot).
+
+option 1: simple correlation graph. This tile map of correlation coefficients is produced by the build-in function `correlationPlotLiP`. It can be used with big data sets comprising large numbers of samples. The analysis is done on feature level.
+
+```{r simple Correlation graph, echo=TRUE, include=TRUE}
+correlationPlotLiP(MSstatsLiP_Summarized, address = FALSE)
+```
+
+option 2: Combined tile and scatter plot This combined tile and scatter plot is produced using the `ggpairs` function within the [GGally](https://www.rdocumentation.org/packages/GGally/versions/1.5.0) package. Due to the complexity of the graph, it might require more computing power for large data sets. In addition to displaying the correlation coefficient, it allows assessment of the data distribution within the correlations. We can use the non-normalized intensity values `INTENSITY`or the log2-transformed values `ABUNDANCE`. The custom function `color_fn` sets the constrains for the color range used in the tile map. The default is `min_val=0.5`, but can be set within the plotting function.
+
+```{r custom function, fig.height=15, fig.width=15, message=FALSE, warning=FALSE, echo=TRUE, include=TRUE}
+color_fn <- function(data, mapping, method="p", use="complete.obs", min_val=0.5, ...){
+              x <- eval_data_col(data, mapping$x)
+              y <- eval_data_col(data, mapping$y)
+              corr <- cor(x, y, method=method, use=use)
+              colFn <- colorRampPalette(c("white", "steelblue"), interpolate ='spline')
+              fill <- colFn(100)[findInterval(corr, seq(min_val, 1, length=100))]
+              ggally_cor(data = data, mapping = mapping, color="black",method=method, use=use,...) + 
+                theme_void() +
+                theme(panel.background = element_rect(fill=fill))
+}
+```
+
+a)  LiP samples
+
+```{r Combined tile and scatterplot correlation graph LiP, fig.height=15, fig.width=15, message=FALSE, warning=FALSE, echo=TRUE, include=TRUE}
+ggpairs(MSstatsLiP_Summarized$LiP$FeatureLevelData%>%
+          ungroup()%>%
+          select(INTENSITY, SUBJECT, FEATURE)%>%
+          spread(., SUBJECT, INTENSITY)%>%
+          select(-FEATURE), 
+   upper = list(continuous = wrap(color_fn, min_val=0.97)),
+   lower = list(continuous = wrap("points", alpha=0.3)),
+   diag = list(continuous = "densityDiag"))+
+  ggtitle("LiP samples")
+```
+
+b)  TrP samples
+
+```{r Combined tile and scatterplot correlation graph TrP, fig.height=15, fig.width=15, message=FALSE, warning=FALSE, echo=TRUE, include=TRUE}
+ggpairs(MSstatsLiP_Summarized$TrP$FeatureLevelData%>%
+          ungroup()%>%
+          select(INTENSITY, SUBJECT, FEATURE)%>%
+          spread(., SUBJECT, INTENSITY)%>%
+          select(-FEATURE), 
+   upper = list(continuous = wrap(color_fn, min_val=0.85)),
+   lower = list(continuous = wrap("points", alpha=0.3)),
+   diag = list(continuous = "densityDiag"))+
+  ggtitle("TrP samples")
+```
+
+## 3.2 Dendrogram clustering
+
+The dendrogram visualizes the hierarchical clustering of the pearson correlation coefficient. The plot is generated using the [dendextent](https://cran.r-project.org/web/packages/dendextend/vignettes/dendextend.html) package.\
+Colored annotations are added using the `colored_bars` function. The color scheme is defined in `dendogram_colors`. Here, we define colors for the Condition. If the data set contains batch numbers, they can be assigned colors for visualization too. This helps to identify batch effects.
+
+```{r Dendrogram clustering set colors, fig.width=15, echo=TRUE, include=TRUE}
+dendogram_colors=MSstatsLiP_Summarized$LiP$FeatureLevelData%>%
+  distinct(RUN,.keep_all=TRUE)%>%
+  rowwise()%>%
+  select(c(SUBJECT,GROUP))%>%
+  arrange(., SUBJECT)%>%
+  mutate(group_col=brewer.pal(nlevels(.$GROUP),name="Paired")[GROUP])
+```
+
+a)  LiP samples
+
+```{r Dendrogram clustering LiP sample, fig.height=5, fig.width=15, echo=TRUE, include=TRUE}
+par(mar = c(5, 5, 3, 7) + 0.1,
+    xpd = NA)           
+dend_L=MSstatsLiP_Summarized$LiP$FeatureLevelData%>%
+          select(ABUNDANCE, SUBJECT, FEATURE)%>%
+          spread(., SUBJECT, ABUNDANCE)%>%
+          select(-FEATURE)%>%
+  cor(., method = "spearman", use="pairwise.complete.obs")%>%
+  subtract(1)%>%
+  multiply_by(-1)%>%
+  as.dist()%>%
+  hclust(method="ward.D2")%>%
+  as.dendrogram()
+dend_L%>%dendextend::set("labels_cex", 0.6)%>%plot(main="LiP samples")
+colored_bars(colors = cbind(dendogram_colors$batch_col,dendogram_colors$group_col), dend = dend_L, rowLabels = c("Batch","Group"))
+```
+
+b)  TrP samples
+
+```{r Dendrogram clustering TrP sample, fig.height=5, fig.width=15, echo=TRUE, include=TRUE}
+dend_T=MSstatsLiP_Summarized$TrP$FeatureLevelData%>%
+          select(ABUNDANCE, SUBJECT, FEATURE)%>%
+          spread(., SUBJECT, ABUNDANCE)%>%
+          select(-FEATURE)%>%
+  cor(., method = "spearman", use="complete.obs")%>%
+  subtract(1)%>%
+  multiply_by(-1)%>%
+  as.dist()%>%
+  hclust(method="ward.D2")%>%
+  as.dendrogram()
+dend_T%>%dendextend::set("labels_cex", 0.6)%>%plot(main="TrP samples")
+colored_bars(colors = cbind(dendogram_colors$batch_col,dendogram_colors$group_col), dend = dend_T, rowLabels = c("Batch","Group"))
+```
+
+## 3.3 Principal component analysis (PCA) {#section-pca}
+
+The Principal component analysis is an alternative way to assess how well the conditions are separated and how well the replicates cluster together. The principal component analysis is performed with the function `prcomp` from the standard [stats](https://www.rdocumentation.org/packages/stats/versions/3.6.2) package. The PCA is visualized using the `ggbiplot` function from the [ggbiplot](https://www.rdocumentation.org/packages/ggbiplot/versions/0.55) package.
+
+a)  LiP samples
+
+```{r Principal component analysis LiP, fig.height=5, fig.width=5, echo=TRUE, include=TRUE}
+n_run=length(unique(MSstatsLiP_Summarized$LiP$FeatureLevelData$RUN))
+
+LiP_PCA=MSstatsLiP_Summarized$LiP$FeatureLevelData%>%
+  filter(!is.na(ABUNDANCE))%>%
+  dplyr::group_by(FEATURE)%>%
+  mutate(complete=n_distinct(RUN)==n_run)%>%
+  filter(complete==TRUE)%>%
+  select(ABUNDANCE, FEATURE, GROUP, RUN)%>%
+  spread(., FEATURE, ABUNDANCE)
+
+ggbiplot(prcomp(LiP_PCA%>%select(-c(GROUP,RUN))),ellipse=T,circle=T,var.axes=F,
+              groups=as.factor(LiP_PCA$GROUP))+ 
+  theme_bw()+
+  labs(color="group", title="LiP samples")+
+  scale_color_brewer(palette = "Paired")+
+  xlim(-3,3)+
+  ylim(-3,3)
+```
+
+b)  TrP samples
+
+```{r Principal component analysis TrP, fig.height=5, fig.width=5, echo=TRUE, include=TRUE}
+TrP_PCA=MSstatsLiP_Summarized$TrP$FeatureLevelData%>%
+  group_by(FEATURE)%>%
+  filter(!is.na(ABUNDANCE))%>%
+  mutate(complete=n_distinct(RUN)==n_run)%>%
+  filter(complete==TRUE)%>%
+  select(ABUNDANCE, FEATURE, GROUP, RUN)%>%
+  spread(., FEATURE, ABUNDANCE)
+
+ggbiplot(prcomp(TrP_PCA%>%select(-c(GROUP,RUN))),ellipse=T,circle=T,var.axes=F,
+              groups=as.factor(TrP_PCA$GROUP), alpha = 0)+ 
+  geom_point(aes(color=TrP_PCA$GROUP), size=2)+
+  theme_bw()+
+  labs(color="group", title="TrP samples")+
+  scale_color_brewer(palette = "Paired")+
+  xlim(-3,3)+
+  ylim(-3,3)
+```
+
+# 4 Statistical analysis
+
+## 4.1 Volcano plots {#volcano}
+
+Visualize the distribution of altered peptides and proteins using a volcano plot.
+
+You can use the built-in function `groupComparisonPlotsLiP()` to create a series of different basic volcano plots. The argument `type` defines the type of plot, either volcano plot or heat map. The argument `which.Protein` gives the option to display peptides from only one protein, `which.comparison`a allows to filter for a comparison of interest. You can choose to display the name of the significant peptides as Protein_PeptideSequence with `ProteinName=TRUE`. The cut-off values for the q-value can be set using the argument `sig`, the default is `sig=0.05`, the cut-off value for the fold change is set using `FCcutoff`.
+
+```{r Volcano plots builtin, echo=TRUE, include=TRUE}
+groupComparisonPlotsLiP(MSstatsLiP_model, 
+                        type = "VolcanoPlot", 
+                        ProteinName = FALSE,
+                        address = FALSE)
+```
+
+For more control over the plot appearance, you can use the following code, based on ggplot and adjust it to convenience
+
+Set the cutoff for the q-value as `adj.pvalue.cutoff` and the fold change as `log2FC.cutoff`.
+
+```{r Volcano plot cutoffs, fig.height=5, fig.width=15, echo=TRUE, include=TRUE}
+adj.pvalue.cutoff=0.05
+log2FC.cutoff=1
+```
+
+Using the function `gghighlight` from the [gghighlight](https://cran.r-project.org/web/packages/gghighlight/vignettes/gghighlight.html) package, you can highlight peptides of a specific protein and color them by whether they are significant or not by using `color=significant`.\
+You can also use `color=fully_TRI` to color peptides by trypticity. Set the filter in gghighlight to `significant=="Yes"` if you only want to color significant peptides. Use `significant=="Yes"&ProteinName=="P37840"` to highlight the significant peptides of only one protein, in this case, P37840. Using the argument `label_key=PepsideSequence` and setting the argument `use_direct_label=TRUE`, you can add the peptide sequence to the plot. This is only advisable if few peptides are significant. **Note** that this will only work in a non-faceted plot. For displaying peptide sequence on a faceted plot, disable the gghighlight function and use `geom_label_repel` or `geom_text_repel` from the [ggrepel](https://cran.r-project.org/web/packages/ggrepel/vignettes/ggrepel.html) package.
+
+a)  LiP data, non-adjusted
+
+```{r Volcano plot LiP, fig.height=5, fig.width=15, message=FALSE, warning=FALSE, echo=TRUE, include=TRUE}
+MSstatsLiP_model$LiP.Model%>%
+  filter(is.na(issue))%>%
+  mutate(significant=case_when(abs(log2FC)>log2FC.cutoff&adj.pvalue<adj.pvalue.cutoff~"Yes",TRUE~"No"))%>%
+  ggplot(aes(x=log2FC, y=-log10(adj.pvalue),color=significant))+
+  geom_point()+
+  gghighlight(ProteinName=="P32485", calculate_per_facet = TRUE, use_group_by=FALSE, use_direct_label = FALSE)+
+  geom_hline(yintercept = -log10(adj.pvalue.cutoff))+
+  geom_vline(xintercept = log2FC.cutoff)+
+  geom_vline(xintercept = -log2FC.cutoff)+
+  facet_grid(~Label, scales = "free")+
+  theme_bw()+
+  labs(title="Structurally altered peptides",
+       subtitle="LiP sample, non-adjusted")+
+  scale_color_manual(values = c("Yes"="darkred", "No"="black"))+
+  guides(color=FALSE)
+```
+
+b)  LiP data, adjusted
+
+```{r Volcano plot LiP adjusted, fig.height=5, fig.width=15, message=FALSE, warning=FALSE, echo=TRUE, include=TRUE}
+MSstatsLiP_model$Adjusted.LiP.Model%>%
+  filter(is.na(issue))%>%
+  mutate(significant=case_when(abs(log2FC)>log2FC.cutoff&adj.pvalue<adj.pvalue.cutoff~"Yes",TRUE~"No"),
+         direction=case_when(log2FC<0~"down",log2FC>0~"up"))%>%
+  ggplot(aes(x=log2FC, y=-log10(adj.pvalue),color=significant))+
+  geom_point()+
+  gghighlight(ProteinName=="P32485", calculate_per_facet = TRUE, use_group_by=FALSE, use_direct_label = FALSE)+
+  geom_hline(yintercept = -log10(adj.pvalue.cutoff))+
+  geom_vline(xintercept = log2FC.cutoff)+
+  geom_vline(xintercept = -log2FC.cutoff)+
+  facet_grid(~Label, scales = "free")+
+  theme_bw()+
+  labs(title="Structurally altered peptides",
+       subtitle="LiP sample")+
+  scale_color_manual(values = c("Yes"="darkred", "No"="black"))+
+  guides(color=FALSE)
+```
+
+Visualize deferentially abundant proteins in the data set
+
+```{r Volcano plot TrP, fig.height=5, fig.width=15, echo=TRUE, include=TRUE}
+MSstatsLiP_model$TrP.Model%>%
+  filter(is.na(issue))%>%
+  mutate(significant=case_when(abs(log2FC)>log2FC.cutoff&adj.pvalue<adj.pvalue.cutoff~"Yes",TRUE~"No"),
+         direction=case_when(log2FC<0~"down",log2FC>0~"up"))%>%
+  ggplot(aes(x=log2FC, y=-log10(adj.pvalue),color=significant))+
+  geom_point()+
+  geom_label_repel(data=.%>%filter(significant=="Yes"), aes(x=log2FC, y=-log10(adj.pvalue), label=Protein), color="black", ylim=c(-log10(adj.pvalue.cutoff), NA))+
+  geom_hline(yintercept = -log10(adj.pvalue.cutoff))+
+  geom_vline(xintercept = log2FC.cutoff)+
+  geom_vline(xintercept = -log2FC.cutoff)+
+  facet_grid(~Label, scales = "free")+
+  theme_bw()+
+  labs(title="Differentiall abundant proteins",
+       subtitle="TrP sample")+
+  scale_color_manual(values = c("Yes"="darkred", "No"="black"))+
+  guides(color=FALSE)
+```
+
+## 4.2 Quantification of altered proteins and peptides
+
+Quantify the number of proteins and peptides with structural alterations in each comparison in the model `Label`. If not set in [section 5.1](#volcano), define the cut off values for the fold change `log2FC.cutoff`and q-value `adj.pvalue.cutoff`. Use `filter(ProteinName=="P37840")` to visualize the number of peptides for one particular protein of interest, here P37840.
+
+```{r cut off values, fig.height=5, fig.width=15, echo=TRUE, include=TRUE}
+adj.pvalue.cutoff=0.05
+log2FC.cutoff=1
+```
+
+a)  LiP data, not adjusted
+
+```{r structurally altered IDs LiP, fig.height=5, fig.width=15, echo=TRUE, include=TRUE}
+grid.arrange(
+  MSstatsLiP_model$LiP.Model%>%
+    filter(is.na(issue)&abs(log2FC)>log2FC.cutoff&adj.pvalue<adj.pvalue.cutoff)%>%
+    group_by(Label)%>%
+    summarize(distinct_peptides=n_distinct(PeptideSequence))%>%
+    ggplot(aes(x=Label, y=distinct_peptides))+
+    geom_col(fill="white",color="black")+
+    theme_bw()+
+    geom_text(aes(label=distinct_peptides), vjust=0, hjust=0.5)+
+    labs(x="Comparison", 
+         y="Number of peptides", 
+         title="Structurally altered peptides",
+         subtitle="LiP sample, non-adjusted"),
+  
+  MSstatsLiP_model$LiP.Model%>%
+    filter(is.na(issue)&abs(log2FC)>log2FC.cutoff&adj.pvalue<adj.pvalue.cutoff)%>%
+    group_by(Label)%>%
+    summarize(distinct_proteins=n_distinct(ProteinName))%>%
+    ggplot(aes(x=Label, y=distinct_proteins))+
+    geom_col(fill="white",color="black")+
+    theme_bw()+
+    geom_text(aes(label=distinct_proteins), vjust=0, hjust=0.5)+
+    labs(x="Comparison", 
+         y="Number of proteins", 
+         title="Structurally altered proteins",
+         subtitle="LiP sample, non-adjusted"),
+  nrow=1)
+```
+
+b)  LiP data, adjusted
+
+```{r structurally altered IDs adjusted LiP, fig.height=5, fig.width=15, echo=TRUE, include=TRUE}
+grid.arrange(
+  MSstatsLiP_model$Adjusted.LiP.Model%>%
+    filter(is.na(issue)&abs(log2FC)>log2FC.cutoff&adj.pvalue<adj.pvalue.cutoff)%>%
+    group_by(Label)%>%
+    summarize(distinct_peptides=n_distinct(PeptideSequence))%>%
+    ggplot(aes(x=Label, y=distinct_peptides))+
+    geom_col(fill="white",color="black")+
+    theme_bw()+
+    geom_text(aes(label=distinct_peptides), vjust=0, hjust=0.5)+
+    labs(x="Comparison", 
+         y="Number of peptides", 
+         title="Structurally altered peptides",
+         subtitle="LiP sample, adjusted"),
+  
+  MSstatsLiP_model$Adjusted.LiP.Model%>%
+    filter(is.na(issue)&abs(log2FC)>log2FC.cutoff&adj.pvalue<adj.pvalue.cutoff)%>%
+    group_by(Label)%>%
+    summarize(distinct_proteins=n_distinct(ProteinName))%>%
+    ggplot(aes(x=Label, y=distinct_proteins))+
+    geom_col(fill="white",color="black")+
+    theme_bw()+
+    geom_text(aes(label=distinct_proteins), vjust=0, hjust=0.5)+
+    labs(x="Comparison", 
+         y="Number of proteins", 
+         title="Structurally altered proteins",
+         subtitle="LiP sample, adjusted"),
+  nrow=1)
+```
+
+Quantify the number of deferentially abundant proteins in the data set
+
+```{r differentially abundant proteins, fig.height=5, fig.width=5, echo=TRUE, include=TRUE}
+MSstatsLiP_model$TrP.Model%>%
+    filter(is.na(issue)&abs(log2FC)>log2FC.cutoff&adj.pvalue<adj.pvalue.cutoff)%>%
+    group_by(Label)%>%
+    summarize(distinct_proteins=n_distinct(Protein))%>%
+    ggplot(aes(x=Label, y=distinct_proteins))+
+    geom_col(fill="white",color="black")+
+    theme_bw()+
+    geom_text(aes(label=distinct_proteins), vjust=0, hjust=0.5)+
+    labs(x="Comparison", 
+         y="Number of proteins", 
+         title="Differentially abundand proteins",
+         subtitle="TrP sample")
+```
+
+## 4.3 Barcode plots
+
+Visualize the positions of structurally altered peptides on the protein sequence using `BarcodePlotLiP()` function. The argument `model_type` can be used to define whether the adjusted model or the non-adjusted. The argument `which.protein` is used to define which protein to visualize. Use the argument `FT.only=TRUE`to visualize only fully tryptic peptides.
+
+a)  LiP data, non-adjusted
+
+```{r fig.height=2.5, fig.width=15, echo=TRUE, include=TRUE}
+BarcodePlotLiP(MSstatsLiP_model, fasta_file,model_type="Adjusted",which.prot = c("P32485"), address=FALSE, FT.only = TRUE)
+```
