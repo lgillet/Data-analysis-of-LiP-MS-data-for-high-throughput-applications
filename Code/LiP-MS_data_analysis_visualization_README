@@ -1,0 +1,19 @@
+LiP-MS data exploration and QC
+
+This notebook allow you to explore LiP-MS data graphically. The following plots are produced:
+
+- Peptide and protein intensity distribution
+- Coefficient of vairiation (CV)
+- Half tryptic and Full tryptic peptide distribution
+- Protein and Peptide Identifications
+- Data correlation
+- Dendrogram clustering
+- Principal component analysis (PCA)
+- Volcano plots
+- Barcode plots
+
+Data to run the notebook is available on Zenodo:
+
+- LiP data: 180516_Sc_OsmoSentinels_LIP_october_Report.csv
+- Tryptic data: 20210514_145322_OSMOTRI_Report.xls
+- fasta file: 170721_OFFICIAL_uniprot_Sce_HRMkit_proteinaseK_aSyn.fasta
