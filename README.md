@@ -23,8 +23,10 @@ Here you can find the scripts for:<br>
  •  **Proteolytic resistance analysis**: proteolytic resistance is calculated as the ratio of the intensity of fully tryptic peptides in the LiP condition to the TrP condition and can be compared across different conditions  <br>
  
 ## Data availability
-• Zenodo:  <br> 
-• PRIDE:  <br>
+• Zenodo:  <br> 10.5281/zenodo.5749994 <br>
+• PRIDE:  <br> PXD031616 and PXD031627 <br>
 
 
 ## How to cite
+
+Malinovska, L., Cappelletti, V., Kohler, D. et al. Proteome-wide structural changes measured with limited proteolysis-mass spectrometry: an advanced protocol for high-throughput applications. Nat Protoc (2022). https://doi.org/10.1038/s41596-022-00771-x
