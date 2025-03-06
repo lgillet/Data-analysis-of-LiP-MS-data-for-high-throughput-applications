@@ -1,7 +1,6 @@
 ---
 title: "Analysis of a LiP-MS data set"
-author: Malinovska Liliana (<malinovska@imsb.biol.ethz.ch>),Valentina Cappelletti
-  (<cappelletti@imsb.biol.ethz.ch>)
+author: Ludovic Gillet (<gillet@imsb.biol.ethz.ch>)
 output:
   html_notebook:
     toc: yes
